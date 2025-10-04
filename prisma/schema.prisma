@@ -1,0 +1,184 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// 1. Datasource and Generator Configuration
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 2. Enum Definitions
+// These correspond to the custom ENUM types in PostgreSQL.
+enum Role {
+  ADMIN
+  MANAGER
+  EMPLOYEE
+}
+
+enum ExpenseStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// 3. Model Definitions
+// Each model corresponds to a table in your PostgreSQL database.
+
+// Represents a distinct customer organization (tenant).
+model Company {
+  id           String   @id @default(cuid())
+  name         String
+  country      String
+  baseCurrency String   @db.VarChar(3)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations (Corrected to one-to-many)
+  users             User[]
+  expenseCategories ExpenseCategory[]
+  expenses          Expense[]
+  approvalRules     ApprovalRule[]
+}
+
+// Stores information for every individual in the system.
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      Role     @default(EMPLOYEE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Foreign Keys & Relations
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Self-relation for manager hierarchy
+  managerId    String?
+  manager      User?   @relation("ManagerSubordinates", fields: [managerId], references: [id], onDelete: SetNull)
+  subordinates User[]  @relation("ManagerSubordinates") // Corrected: A manager can have many subordinates
+
+  // Back-relations (Corrected to one-to-many)
+  submittedExpenses Expense[]         @relation("SubmittedBy")
+  ruleAssignments   RuleApprover[]    @relation("ApproverForRules")
+  approvalActions   ExpenseApproval[] @relation("ApprovalActionsBy")
+}
+
+// A lookup table for expense categories, defined per company.
+model ExpenseCategory {
+  id   String @id @default(cuid())
+  name String
+
+  // Foreign Keys & Relations
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Back-relations (Corrected to one-to-many)
+  expenses Expense[]
+
+  // Constraints
+  @@unique([name, companyId])
+}
+
+// The central model for tracking individual expense claims.
+model Expense {
+  id          String        @id @default(cuid())
+  description String
+  expenseDate DateTime
+  amount      Decimal       @db.Decimal(10, 2)
+  currency    String        @db.VarChar(3)
+  status      ExpenseStatus @default(DRAFT)
+  remarks     String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Foreign Keys & Relations
+  submitterId String
+  submitter   User   @relation("SubmittedBy", fields: [submitterId], references: [id], onDelete: Cascade)
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  categoryId String
+  category   ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  // Back-relations
+  receipt   Receipt?
+  approvals ExpenseApproval[] // Corrected: An expense can have multiple approval steps
+}
+
+// Stores metadata for uploaded receipt files.
+model Receipt {
+  id         String   @id @default(cuid())
+  url        String
+  fileName   String
+  fileType   String
+  uploadedAt DateTime @default(now())
+
+  // One-to-one relation with Expense
+  expenseId String  @unique
+  expense   Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+}
+
+// Defines the flexible conditions and approvers for expenses.
+model ApprovalRule {
+  id                        String   @id @default(cuid())
+  name                      String
+  description               String?
+  isManagerApprovalRequired Boolean  @default(true)
+  isSequenceRequired        Boolean  @default(false)
+  minApprovalPercentage     Int?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  // Foreign Keys & Relations
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Back-relations (Corrected to one-to-many)
+  approvers RuleApprover[]
+}
+
+// A junction model linking specific users (approvers) to an ApprovalRule.
+model RuleApprover {
+  id            String  @id @default(cuid())
+  sequenceOrder Int?
+  isRequired    Boolean @default(false)
+
+  // Foreign Keys & Relations
+  ruleId       String
+  approvalRule ApprovalRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  approverId String
+  approver   User   @relation("ApproverForRules", fields: [approverId], references: [id], onDelete: Cascade)
+
+  // Constraints
+  @@unique([ruleId, approverId])
+}
+
+// An immutable log that records each approver's action on a specific expense.
+model ExpenseApproval {
+  id          String         @id @default(cuid())
+  status      ApprovalStatus @default(PENDING)
+  comments    String?
+  processedAt DateTime?
+
+  // Foreign Keys & Relations
+  expenseId String
+  expense   Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  approverId String
+  approver   User   @relation("ApprovalActionsBy", fields: [approverId], references: [id], onDelete: Restrict) // CORRECTED: Preserves audit trail
+}
