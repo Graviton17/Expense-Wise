@@ -1,83 +1,160 @@
-// Type definitions for the Expense Management System
+// Type definitions for ExpenseWise - matching Prisma schema
 
-export interface User {
+// Enums from Prisma schema
+export type Role = "ADMIN" | "MANAGER" | "EMPLOYEE";
+export type ExpenseStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
+export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+// Core entities matching Prisma models
+export interface Company {
   id: string;
   name: string;
-  email: string;
-  role: "ADMIN" | "MANAGER" | "EMPLOYEE";
-  status: "ACTIVE" | "INACTIVE";
-  companyId: string;
+  country: string;
+  baseCurrency: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
-export interface Company {
+export interface User {
   id: string;
+  email: string;
   name: string;
-  address: string;
-  country: string;
-  currency: string;
+  password?: string; // Optional for frontend use
+  role: Role;
   createdAt: Date;
   updatedAt: Date;
+  companyId: string;
+  managerId?: string;
+  
+  // Relations
+  company?: Company;
+  manager?: User;
+  subordinates?: User[];
+  submittedExpenses?: Expense[];
+  ruleAssignments?: RuleApprover[];
+  approvalActions?: ExpenseApproval[];
+  
+  // UI-specific fields
+  avatar?: string;
+  initials?: string;
+  status?: "active" | "inactive";
+  lastActiveAt?: Date;
+}
+
+export interface ExpenseCategory {
+  id: string;
+  name: string;
+  companyId: string;
+  
+  // Relations
+  company?: Company;
+  expenses?: Expense[];
+  
+  // UI-specific fields
+  color?: string;
+  expenseCount?: number;
 }
 
 export interface Expense {
   id: string;
-  userId: string;
-  companyId: string;
+  description: string;
+  expenseDate: Date;
   amount: number;
   currency: string;
-  category: string;
-  description: string;
-  status: "PENDING" | "APPROVED" | "REJECTED" | "PAID";
-  submittedAt: Date;
-  approvedAt?: Date;
-  approvedBy?: string;
-  rejectedAt?: Date;
-  rejectedBy?: string;
-  receipts: Receipt[];
+  status: ExpenseStatus;
+  remarks?: string;
   createdAt: Date;
   updatedAt: Date;
+  submitterId: string;
+  companyId: string;
+  categoryId: string;
+  
+  // Relations
+  submitter?: User;
+  company?: Company;
+  category?: ExpenseCategory;
+  receipt?: Receipt;
+  approvals?: ExpenseApproval[];
+  
+  // UI-specific fields
+  convertedAmount?: number;
+  exchangeRate?: number;
+  priority?: "urgent" | "high" | "normal" | "low";
+  currentApprover?: User;
+  isProcessing?: boolean;
 }
 
 export interface Receipt {
   id: string;
-  expenseId: string;
+  url: string;
   fileName: string;
-  fileUrl: string;
   fileType: string;
-  fileSize: number;
-  ocrData?: OCRData;
-  createdAt: Date;
-}
-
-export interface OCRData {
-  merchantName?: string;
-  amount?: number;
-  currency?: string;
-  date?: Date;
-  category?: string;
-  confidence: number;
-}
-
-export interface ApprovalWorkflow {
-  id: string;
-  companyId: string;
-  name: string;
-  rules: ApprovalRule[];
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
+  uploadedAt: Date;
+  expenseId: string;
+  
+  // Relations
+  expense?: Expense;
+  
+  // UI-specific fields
+  thumbnailUrl?: string;
+  fileSize?: string;
+  ocrData?: OCRResults;
 }
 
 export interface ApprovalRule {
   id: string;
-  workflowId: string;
-  condition: "AMOUNT_THRESHOLD" | "CATEGORY" | "USER_ROLE";
-  value: string | number;
-  approverRole: "MANAGER" | "ADMIN";
+  name: string;
+  description?: string;
+  isManagerApprovalRequired: boolean;
+  isSequenceRequired: boolean;
+  minApprovalPercentage?: number;
+  createdAt: Date;
+  updatedAt: Date;
+  companyId: string;
+  
+  // Relations
+  company?: Company;
+  approvers?: RuleApprover[];
+}
+
+export interface RuleApprover {
+  id: string;
+  sequenceOrder?: number;
   isRequired: boolean;
-  order: number;
+  ruleId: string;
+  approverId: string;
+  
+  // Relations
+  approvalRule?: ApprovalRule;
+  approver?: User;
+  
+  // UI-specific fields
+  user?: User;
+}
+
+export interface ExpenseApproval {
+  id: string;
+  status: ApprovalStatus;
+  comments?: string;
+  processedAt?: Date;
+  expenseId: string;
+  approverId: string;
+  
+  // Relations
+  expense?: Expense;
+  approver?: User;
+}
+
+// OCR-related types
+export interface OCRResults {
+  confidence: number;
+  description?: string;
+  amount?: number;
+  currency?: string;
+  date?: Date;
+  vendor?: string;
+  category?: string;
+  extractedText: string;
 }
 
 // Form types
