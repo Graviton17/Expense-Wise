@@ -15,9 +15,10 @@ export { default as CurrencyDisplay } from "./shared/currency-display";
 
 // Dashboard Components - Admin
 export { default as UserManagementTable } from "./dashboard/admin/user-management-table";
+export { default as ApprovalRuleEditor } from "./dashboard/admin/approval-rule-editor";
 
 // Dashboard Components - Employee
-export { default as ExpenseStats } from "./dashboard/employee/expense-stats";
+export { default as ExpenseHistoryTable } from "./dashboard/employee/expense-history-table";
 
 // Dashboard Components - Manager
 export { default as PendingApprovalsTable } from "./dashboard/manager/pending-approvals-table";
