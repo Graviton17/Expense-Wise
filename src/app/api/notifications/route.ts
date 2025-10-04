@@ -46,17 +46,23 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { page, limit, unreadOnly } = validationResult.data;
+    const { page, limit, unreadOnly, type } = validationResult.data;
 
     // Calculate pagination
     const offset = (page - 1) * limit;
     const pagination = { page, limit, offset };
 
+    // Build filters
+    const filters = {
+      unreadOnly,
+      type,
+    };
+
     // Get notifications using service
     const result = await NotificationService.getNotificationsForUser(
       user.sub,
       pagination,
-      unreadOnly
+      filters
     );
 
     if (!result.success) {

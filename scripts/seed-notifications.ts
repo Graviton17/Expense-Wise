@@ -6,11 +6,13 @@ async function seedNotifications() {
   try {
     console.log("Seeding test notifications...");
 
-    // First, let's get a user to associate notifications with
-    const user = await prisma.user.findFirst();
+    // First, let's get the admin user specifically
+    const user = await prisma.user.findUnique({
+      where: { email: "admin@company.com" },
+    });
 
     if (!user) {
-      console.log("No users found. Please create a user first.");
+      console.log("Admin user not found. Please create the admin user first.");
       return;
     }
 

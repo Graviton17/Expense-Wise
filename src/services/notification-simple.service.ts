@@ -6,13 +6,21 @@ export class NotificationService {
   static async getNotificationsForUser(
     userId: string,
     pagination: { page: number; limit: number; offset: number },
-    unreadOnly: boolean = false
+    filters: { unreadOnly?: boolean; type?: NotificationType } = {}
   ) {
     try {
-      const where: { userId: string; isRead?: boolean } = { userId };
+      const where: {
+        userId: string;
+        isRead?: boolean;
+        type?: NotificationType;
+      } = { userId };
 
-      if (unreadOnly) {
+      if (filters.unreadOnly) {
         where.isRead = false;
+      }
+
+      if (filters.type) {
+        where.type = filters.type;
       }
 
       const total = await prisma.notification.count({ where });
