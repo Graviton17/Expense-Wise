@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/contexts";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -16,8 +17,15 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "ExpenseWise - Smart Expense Management",
-  description: "Streamline your expense management with OCR-powered receipt processing, flexible approval workflows, and real-time currency conversion.",
-  keywords: ["expense management", "receipt processing", "OCR", "approval workflow", "business expenses"],
+  description:
+    "Streamline your expense management with OCR-powered receipt processing, flexible approval workflows, and real-time currency conversion.",
+  keywords: [
+    "expense management",
+    "receipt processing",
+    "OCR",
+    "approval workflow",
+    "business expenses",
+  ],
 };
 
 export default function RootLayout({
@@ -28,7 +36,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <body className="font-sans antialiased">
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

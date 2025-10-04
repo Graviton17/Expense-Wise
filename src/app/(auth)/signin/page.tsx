@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -9,11 +9,25 @@ import Link from "next/link";
 import { Loader2, Building2, CheckCircle2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
+import AuthService from "@/services/auth.service";
 
 const signinSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -23,7 +37,6 @@ const signinSchema = z.object({
 type SigninFormValues = z.infer<typeof signinSchema>;
 
 export default function SigninPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -32,9 +45,17 @@ export default function SigninPage() {
   useEffect(() => {
     const message = searchParams.get("message");
     const errorParam = searchParams.get("error");
-    
+
     if (message) setSuccessMessage(message);
     if (errorParam) setError(errorParam);
+
+    // Check if user is already authenticated
+    if (AuthService.isAuthenticated()) {
+      const user = AuthService.getCurrentUser();
+      if (user) {
+        AuthService.redirectByRole(user);
+      }
+    }
   }, [searchParams]);
 
   const form = useForm<SigninFormValues>({
@@ -50,35 +71,14 @@ export default function SigninPage() {
     setError(null);
 
     try {
-      const response = await fetch("/api/auth/signin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
+      await AuthService.signIn(data);
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Failed to sign in");
-      }
-
-      const result = await response.json();
-      
-      // Redirect based on user role
-      switch (result.user.role) {
-        case "ADMIN":
-          window.location.href = "/dashboard/admin";
-          break;
-        case "MANAGER":
-          window.location.href = "/dashboard/manager";
-          break;
-        case "EMPLOYEE":
-          window.location.href = "/dashboard/employee";
-          break;
-        default:
-          window.location.href = "/dashboard";
-      }
+      // Success - user will be redirected by AuthService.redirectByRole
+      // This is already handled in the service
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Invalid email or password");
+      setError(
+        err instanceof Error ? err.message : "Invalid email or password"
+      );
     } finally {
       setIsLoading(false);
     }
@@ -95,7 +95,7 @@ export default function SigninPage() {
       <Card className="w-full max-w-md shadow-2xl border-0 relative overflow-hidden">
         {/* Gradient accent bar */}
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600"></div>
-        
+
         <CardHeader className="space-y-1 pb-6 pt-8 bg-gradient-to-b from-blue-50/50 to-transparent">
           <div className="flex items-center justify-center mb-4">
             <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg">
@@ -113,7 +113,9 @@ export default function SigninPage() {
           {successMessage && (
             <Alert className="mb-6 border-green-200 bg-green-50">
               <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800">{successMessage}</AlertDescription>
+              <AlertDescription className="text-green-800">
+                {successMessage}
+              </AlertDescription>
             </Alert>
           )}
 
@@ -132,11 +134,11 @@ export default function SigninPage() {
                   <FormItem>
                     <FormLabel>Email Address</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="email" 
-                        placeholder="your.email@company.com" 
+                      <Input
+                        type="email"
+                        placeholder="your.email@company.com"
                         autoComplete="username"
-                        {...field} 
+                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
@@ -151,19 +153,19 @@ export default function SigninPage() {
                   <FormItem>
                     <div className="flex items-center justify-between">
                       <FormLabel>Password</FormLabel>
-                      <Link 
-                        href="/forgot-password" 
+                      <Link
+                        href="/forgot-password"
                         className="text-sm text-primary hover:underline"
                       >
                         Forgot password?
                       </Link>
                     </div>
                     <FormControl>
-                      <Input 
-                        type="password" 
-                        placeholder="••••••••" 
+                      <Input
+                        type="password"
+                        placeholder="••••••••"
                         autoComplete="current-password"
-                        {...field} 
+                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
@@ -171,9 +173,9 @@ export default function SigninPage() {
                 )}
               />
 
-              <Button 
-                type="submit" 
-                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-3 shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5" 
+              <Button
+                type="submit"
+                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-3 shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5"
                 disabled={isLoading}
               >
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -188,21 +190,27 @@ export default function SigninPage() {
                 <Separator className="border-gray-200" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-white px-3 text-gray-500">
-                  Need help?
-                </span>
+                <span className="bg-white px-3 text-gray-500">Need help?</span>
               </div>
             </div>
 
             <div className="space-y-4 text-center text-sm">
               <div>
-                <span className="text-gray-600">Don't have an account? </span>
-                <Link href="/signup" className="font-semibold text-blue-600 hover:text-indigo-600 transition-colors">
+                <span className="text-gray-600">
+                  Don&apos;t have an account?{" "}
+                </span>
+                <Link
+                  href="/signup"
+                  className="font-semibold text-blue-600 hover:text-indigo-600 transition-colors"
+                >
                   Create company account
                 </Link>
               </div>
               <div>
-                <Link href="/support" className="text-blue-600 hover:text-indigo-600 font-medium transition-colors">
+                <Link
+                  href="/support"
+                  className="text-blue-600 hover:text-indigo-600 font-medium transition-colors"
+                >
                   Contact Support
                 </Link>
               </div>

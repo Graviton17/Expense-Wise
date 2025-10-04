@@ -1,3 +1,6 @@
+// Auth Components
+export * from "./auth";
+
 // Layout Components
 export { AuthLayout } from "./layout/auth-layout";
 export { DashboardLayout } from "./layout/dashboard-layout";
@@ -9,7 +12,12 @@ export { EnhancedInput } from "./forms/enhanced-input";
 
 // Shared Components
 export { StatusBadge, ExpenseStatusBadge } from "./shared/status-badge";
-export { CurrencyDisplay, FinancialAmount, CurrencySelector, COMMON_CURRENCIES } from "./shared/currency-display";
+export {
+  CurrencyDisplay,
+  FinancialAmount,
+  CurrencySelector,
+  COMMON_CURRENCIES,
+} from "./shared/currency-display";
 
 // Dashboard Components - Admin
 export { default as UserManagementTable } from "./dashboard/admin/user-management-table";
