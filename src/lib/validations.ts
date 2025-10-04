@@ -72,11 +72,11 @@ export const userManagementSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
 
   role: z.enum(["ADMIN", "MANAGER", "EMPLOYEE"], {
-    required_error: "Please select a role",
+    message: "Please select a role",
   }),
 
   status: z.enum(["ACTIVE", "INACTIVE"], {
-    required_error: "Please select a status",
+    message: "Please select a status",
   }),
 });
 
@@ -107,3 +107,6 @@ export type UserSigninFormData = z.infer<typeof userSigninSchema>;
 export type ExpenseSubmissionFormData = z.infer<typeof expenseSubmissionSchema>;
 export type UserManagementFormData = z.infer<typeof userManagementSchema>;
 export type ApprovalWorkflowFormData = z.infer<typeof approvalWorkflowSchema>;
+
+// Export company validation schemas
+export * from "./validations/companies";

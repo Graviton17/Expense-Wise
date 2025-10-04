@@ -17,7 +17,7 @@ export class ApprovalService {
     approverId: string;
   }): Promise<ServiceResult<ApprovalPublic>> {
     try {
-      const approval = await prisma.approval.create({
+      const approval = await prisma.expenseApproval.create({
         data: {
           ...data,
           status: "PENDING" as ApprovalStatus,
@@ -25,7 +25,7 @@ export class ApprovalService {
         include: {
           expense: {
             include: {
-              user: true,
+              submitter: true,
             },
           },
           approver: true,
@@ -60,12 +60,12 @@ export class ApprovalService {
     id: string
   ): Promise<ServiceResult<ApprovalPublic>> {
     try {
-      const approval = await prisma.approval.findUnique({
+      const approval = await prisma.expenseApproval.findUnique({
         where: { id },
         include: {
           expense: {
             include: {
-              user: true,
+              submitter: true,
               category: true,
             },
           },
@@ -112,14 +112,14 @@ export class ApprovalService {
         status: "PENDING" as ApprovalStatus,
       };
 
-      const total = await prisma.approval.count({ where });
+      const total = await prisma.expenseApproval.count({ where });
 
-      const approvals = await prisma.approval.findMany({
+      const approvals = await prisma.expenseApproval.findMany({
         where,
         include: {
           expense: {
             include: {
-              user: true,
+              submitter: true,
               category: true,
             },
           },
@@ -128,7 +128,7 @@ export class ApprovalService {
         skip: pagination.offset,
         take: pagination.limit,
         orderBy: {
-          createdAt: "desc",
+          processedAt: "desc",
         },
       });
 
@@ -170,17 +170,17 @@ export class ApprovalService {
   ): Promise<ServiceResult<ApprovalPublic>> {
     try {
       // Update approval
-      const approval = await prisma.approval.update({
+      const approval = await prisma.expenseApproval.update({
         where: { id: approvalId },
         data: {
           status: "APPROVED" as ApprovalStatus,
-          comment,
+          comments: comment,
           processedAt: new Date(),
         },
         include: {
           expense: {
             include: {
-              user: true,
+              submitter: true,
             },
           },
           approver: true,
@@ -197,32 +197,30 @@ export class ApprovalService {
 
       // Record metrics
       businessMetrics.expenseApproved(
-        approval.expense.amount,
+        Number(approval.expense.amount),
         approval.expense.currency,
         approverId
       );
 
-      // Send notification email to expense owner
+      // Send notification email to submitter
       await sendEmail({
-        to: approval.expense.user.email,
+        to: approval.expense.submitter.email,
         subject: "Expense Approved",
         html: `
-          <h2>Your expense has been approved</h2>
+          <h2>Your expense has been approved!</h2>
           <p>Expense: ${approval.expense.description}</p>
-          <p>Amount: ${approval.expense.currency} ${approval.expense.amount}</p>
-          ${comment ? `<p>Comment: ${comment}</p>` : ""}
+          <p>Amount: ${approval.expense.currency} ${Number(
+          approval.expense.amount
+        )}</p>
         `,
-      }).catch((error) => {
-        businessLogger.error("Failed to send approval email", error);
       });
 
-      businessLogger.logApprovalEvent(
-        "approved",
+      businessLogger.info("Expense approved", {
         approvalId,
-        approval.expenseId,
+        expenseId: approval.expenseId,
         approverId,
-        { comment }
-      );
+        comment,
+      });
 
       return {
         success: true,
@@ -250,17 +248,17 @@ export class ApprovalService {
   ): Promise<ServiceResult<ApprovalPublic>> {
     try {
       // Update approval
-      const approval = await prisma.approval.update({
+      const approval = await prisma.expenseApproval.update({
         where: { id: approvalId },
         data: {
           status: "REJECTED" as ApprovalStatus,
-          comment,
+          comments: comment,
           processedAt: new Date(),
         },
         include: {
           expense: {
             include: {
-              user: true,
+              submitter: true,
             },
           },
           approver: true,
@@ -277,19 +275,21 @@ export class ApprovalService {
 
       // Record metrics
       businessMetrics.expenseRejected(
-        approval.expense.amount,
+        Number(approval.expense.amount),
         approval.expense.currency,
         comment
       );
 
       // Send notification email to expense owner
       await sendEmail({
-        to: approval.expense.user.email,
+        to: approval.expense.submitter.email,
         subject: "Expense Rejected",
         html: `
           <h2>Your expense has been rejected</h2>
           <p>Expense: ${approval.expense.description}</p>
-          <p>Amount: ${approval.expense.currency} ${approval.expense.amount}</p>
+          <p>Amount: ${approval.expense.currency} ${Number(
+          approval.expense.amount
+        )}</p>
           <p>Reason: ${comment}</p>
         `,
       }).catch((error) => {
@@ -327,13 +327,13 @@ export class ApprovalService {
     expenseId: string
   ): Promise<ServiceResult<ApprovalPublic[]>> {
     try {
-      const approvals = await prisma.approval.findMany({
+      const approvals = await prisma.expenseApproval.findMany({
         where: { expenseId },
         include: {
           approver: true,
         },
         orderBy: {
-          createdAt: "asc",
+          processedAt: "asc",
         },
       });
 
@@ -394,14 +394,14 @@ export class ApprovalService {
         }
       }
 
-      const total = await prisma.approval.count({ where });
+      const total = await prisma.expenseApproval.count({ where });
 
-      const approvals = await prisma.approval.findMany({
+      const approvals = await prisma.expenseApproval.findMany({
         where,
         include: {
           expense: {
             include: {
-              user: true,
+              submitter: true,
               category: true,
             },
           },
@@ -410,7 +410,7 @@ export class ApprovalService {
         skip: pagination.offset,
         take: pagination.limit,
         orderBy: {
-          createdAt: "desc",
+          processedAt: "desc",
         },
       });
 
