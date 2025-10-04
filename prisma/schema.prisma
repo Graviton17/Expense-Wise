@@ -32,6 +32,14 @@ enum ApprovalStatus {
   REJECTED
 }
 
+enum NotificationType {
+  EXPENSE_SUBMITTED
+  EXPENSE_APPROVED
+  EXPENSE_REJECTED
+  APPROVAL_REQUIRED
+  SYSTEM_NOTIFICATION
+}
+
 // 3. Model Definitions
 // Each model corresponds to a table in your PostgreSQL database.
 
@@ -74,6 +82,7 @@ model User {
   submittedExpenses Expense[]         @relation("SubmittedBy")
   ruleAssignments   RuleApprover[]    @relation("ApproverForRules")
   approvalActions   ExpenseApproval[] @relation("ApprovalActionsBy")
+  notifications     Notification[]    @relation("UserNotifications")
 }
 
 // A lookup table for expense categories, defined per company.
@@ -181,4 +190,24 @@ model ExpenseApproval {
 
   approverId String
   approver   User   @relation("ApprovalActionsBy", fields: [approverId], references: [id], onDelete: Restrict) // CORRECTED: Preserves audit trail
+}
+
+// Stores user notifications for various system events
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  data      Json?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  // Foreign Keys & Relations
+  user User @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([userId, createdAt])
+  @@index([userId, isRead])
 }

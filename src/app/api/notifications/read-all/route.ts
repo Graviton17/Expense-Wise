@@ -1,27 +1,57 @@
 import { NextRequest, NextResponse } from "next/server";
+import { authenticateUser } from "@/middleware/auth";
+import { NotificationService } from "@/services/notification-simple.service";
 
 /**
  * Mark All Notifications as Read
- * POST /api/notifications/read-all
+ * PUT /api/notifications/read-all
  */
-export async function POST(request: NextRequest) {
+export async function PUT(request: NextRequest) {
   try {
-    // TODO: Implement mark all notifications as read
-    // - Verify authentication
-    // - Update all unread notifications for current user
-    // - Set readAt timestamp for all
-    // - Return success message with count
+    // Authenticate user
+    const authResult = await authenticateUser(request);
+    if (!authResult.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "AUTHENTICATION_ERROR",
+            message: "Authentication required",
+          },
+        },
+        { status: 401 }
+      );
+    }
 
+    const user = authResult.user!;
+
+    // Mark all notifications as read
+    const result = await NotificationService.markAllAsRead(user.sub);
+
+    if (!result.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: result.error,
+        },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "All notifications marked as read",
+    });
+  } catch (error) {
+    console.error("Error marking all notifications as read:", error);
     return NextResponse.json(
       {
-        message: "Mark all notifications as read - To be implemented",
-        data: { markedCount: 0 },
+        success: false,
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "Failed to mark all notifications as read",
+        },
       },
-      { status: 501 }
-    );
-  } catch (error) {
-    return NextResponse.json(
-      { error: "Failed to mark all notifications as read" },
       { status: 500 }
     );
   }

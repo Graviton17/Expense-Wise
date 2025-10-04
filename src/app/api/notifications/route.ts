@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { authenticateUser } from "@/middleware/auth";
+import { NotificationService } from "@/services/notification-simple.service";
+import { NotificationQuerySchema } from "@/lib/validations/notification";
 
 /**
  * Get User Notifications
@@ -6,29 +9,90 @@ import { NextRequest, NextResponse } from "next/server";
  */
 export async function GET(request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "20");
-    const unreadOnly = searchParams.get("unreadOnly") === "true";
+    // Authenticate user
+    const authResult = await authenticateUser(request);
+    if (!authResult.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "AUTHENTICATION_ERROR",
+            message: "Authentication required",
+          },
+        },
+        { status: 401 }
+      );
+    }
 
-    // TODO: Implement get notifications logic
-    // - Verify authentication
-    // - Fetch notifications for current user
-    // - Filter by read/unread status
-    // - Apply pagination
-    // - Return notifications list
+    const user = authResult.user!;
 
+    // Validate query parameters
+    const searchParams = Object.fromEntries(
+      request.nextUrl.searchParams.entries()
+    );
+    const validationResult = NotificationQuerySchema.safeParse(searchParams);
+
+    if (!validationResult.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Invalid query parameters",
+            details: validationResult.error.issues,
+          },
+        },
+        { status: 400 }
+      );
+    }
+
+    const { page, limit, unreadOnly } = validationResult.data;
+
+    // Calculate pagination
+    const offset = (page - 1) * limit;
+    const pagination = { page, limit, offset };
+
+    // Get notifications using service
+    const result = await NotificationService.getNotificationsForUser(
+      user.sub,
+      pagination,
+      unreadOnly
+    );
+
+    if (!result.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: result.error,
+        },
+        { status: 500 }
+      );
+    }
+
+    // Get unread count
+    const unreadCountResult = await NotificationService.getUnreadCount(
+      user.sub
+    );
+    const unreadCount = unreadCountResult.success ? unreadCountResult.data : 0;
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        notifications: result.data.data,
+        pagination: result.data.meta,
+        unreadCount,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching notifications:", error);
     return NextResponse.json(
       {
-        message: "Get notifications - To be implemented",
-        data: [],
-        pagination: { page, limit, total: 0 },
+        success: false,
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "Failed to fetch notifications",
+        },
       },
-      { status: 501 }
-    );
-  } catch (error) {
-    return NextResponse.json(
-      { error: "Failed to fetch notifications" },
       { status: 500 }
     );
   }
