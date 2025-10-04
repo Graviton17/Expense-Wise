@@ -25,14 +25,18 @@ import {
   Bell,
   Settings,
   LogOut,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn, formatCurrency, formatDate, formatRelativeTime, getUserInitials } from "@/lib/utils";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ExpenseSubmitModal } from "@/components/employee/expense-submit-modal";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // Mock data
 const mockUser = {
@@ -108,12 +112,78 @@ export default function EmployeeDashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
+  const [sortField, setSortField] = useState<string>("createdAt");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const itemsPerPage = 10;
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + N to open new expense modal
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+        e.preventDefault();
+        setIsSubmitModalOpen(true);
+      }
+      // Ctrl/Cmd + R to refresh
+      if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+        e.preventDefault();
+        handleRefresh();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, []);
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    console.log("Refreshing expenses...");
+    setTimeout(() => setIsRefreshing(false), 1000);
+  };
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirection("desc");
+    }
+  };
+
+  const handleExport = () => {
+    console.log("Exporting expenses...");
+    // Export logic here
+  };
 
   const filteredExpenses = mockExpenses.filter(expense => {
     const matchesSearch = expense.description.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === "all" || expense.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  // Sort expenses
+  const sortedExpenses = [...filteredExpenses].sort((a, b) => {
+    let aValue = a[sortField as keyof typeof a];
+    let bValue = b[sortField as keyof typeof b];
+    
+    if (sortField === "amount") {
+      aValue = a.amount;
+      bValue = b.amount;
+    }
+    
+    if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
+    if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  // Pagination
+  const totalPages = Math.ceil(sortedExpenses.length / itemsPerPage);
+  const paginatedExpenses = sortedExpenses.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50">
@@ -197,14 +267,23 @@ export default function EmployeeDashboardPage() {
                 Track and manage your expense submissions
               </p>
             </div>
-            <Button
-              size="lg"
-              onClick={() => setIsSubmitModalOpen(true)}
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-0.5"
-            >
-              <Plus className="h-5 w-5 mr-2" />
-              New Expense
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="lg"
+                    onClick={() => setIsSubmitModalOpen(true)}
+                    className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-0.5"
+                  >
+                    <Plus className="h-5 w-5 mr-2" />
+                    New Expense
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Create new expense (Ctrl+N)</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
 
           {/* Quick Stats Cards */}
@@ -313,10 +392,42 @@ export default function EmployeeDashboardPage() {
                     <SelectItem value="REJECTED">Rejected</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button variant="outline" size="sm" className="border-gray-300 hover:bg-gray-50">
-                  <Download className="h-4 w-4 mr-2" />
-                  Export
-                </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="border-gray-300 hover:bg-gray-50"
+                        onClick={handleExport}
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Export
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Export expenses to CSV</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="border-gray-300 hover:bg-gray-50"
+                        onClick={handleRefresh}
+                        disabled={isRefreshing}
+                      >
+                        <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Refresh (Ctrl+R)</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
             </div>
           </CardHeader>
@@ -338,7 +449,12 @@ export default function EmployeeDashboardPage() {
                     <TableHead className="w-[120px] font-semibold text-gray-700">
                       <div className="flex items-center space-x-2">
                         <span>Date</span>
-                        <Button variant="ghost" size="sm" className="h-4 w-4 p-0 hover:bg-gray-200">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-4 w-4 p-0 hover:bg-gray-200"
+                          onClick={() => handleSort("expenseDate")}
+                        >
                           <ArrowUpDown className="h-3 w-3" />
                         </Button>
                       </div>
@@ -347,7 +463,12 @@ export default function EmployeeDashboardPage() {
                     <TableHead className="w-[120px] font-semibold text-gray-700">
                       <div className="flex items-center space-x-2">
                         <span>Amount</span>
-                        <Button variant="ghost" size="sm" className="h-4 w-4 p-0 hover:bg-gray-200">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-4 w-4 p-0 hover:bg-gray-200"
+                          onClick={() => handleSort("amount")}
+                        >
                           <ArrowUpDown className="h-3 w-3" />
                         </Button>
                       </div>
@@ -379,21 +500,67 @@ export default function EmployeeDashboardPage() {
 }
 
 function ExpenseTableRow({ expense }: { expense: any }) {
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+  const handleViewDetails = () => {
+    setIsViewModalOpen(true);
+    console.log("Viewing expense:", expense.id);
+  };
+
+  const handleEdit = () => {
+    setIsEditModalOpen(true);
+    console.log("Editing expense:", expense.id);
+  };
+
+  const handleSubmitForApproval = () => {
+    console.log("Submitting expense for approval:", expense.id);
+    // Show success toast
+    alert(`Expense "${expense.description}" submitted for approval!`);
+  };
+
+  const handleDuplicate = () => {
+    console.log("Duplicating expense:", expense.id);
+    alert(`Expense duplicated! You can now edit the copy.`);
+  };
+
+  const handleDelete = () => {
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    console.log("Deleting expense:", expense.id);
+    alert(`Expense "${expense.description}" deleted successfully!`);
+    setIsDeleteDialogOpen(false);
+  };
+
+  const handleDownloadReceipt = () => {
+    console.log("Downloading receipt for expense:", expense.id);
+    // Simulate download
+    const link = document.createElement('a');
+    link.href = expense.receipt?.url || '';
+    link.download = expense.receipt?.fileName || 'receipt.jpg';
+    link.click();
+  };
+
   return (
     <TableRow className="hover:bg-blue-50/50 transition-colors duration-150 border-b border-gray-100">
       {/* Receipt Thumbnail */}
       <TableCell className="py-4">
         {expense.receipt ? (
           <div className="relative group">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={expense.receipt.url}
-              alt="Receipt"
-              className="h-16 w-16 object-cover rounded-lg border-2 border-gray-200 shadow-sm group-hover:shadow-md transition-shadow duration-200"
-            />
-            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 rounded-lg transition-opacity flex items-center justify-center">
-              <Eye className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
+            <button onClick={handleViewDetails} className="focus:outline-none">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={expense.receipt.url}
+                alt="Receipt"
+                className="h-16 w-16 object-cover rounded-lg border-2 border-gray-200 shadow-sm group-hover:shadow-md transition-shadow duration-200 cursor-pointer"
+              />
+              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 rounded-lg transition-opacity flex items-center justify-center">
+                <Eye className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            </button>
           </div>
         ) : (
           <div className="h-16 w-16 bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
@@ -462,30 +629,39 @@ function ExpenseTableRow({ expense }: { expense: any }) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem className="cursor-pointer">
+            <DropdownMenuItem className="cursor-pointer" onClick={handleViewDetails}>
               <Eye className="h-4 w-4 mr-2" />
               View Details
             </DropdownMenuItem>
+            {expense.receipt && (
+              <DropdownMenuItem className="cursor-pointer" onClick={handleDownloadReceipt}>
+                <Download className="h-4 w-4 mr-2" />
+                Download Receipt
+              </DropdownMenuItem>
+            )}
             {expense.status === "DRAFT" && (
               <>
-                <DropdownMenuItem className="cursor-pointer">
+                <DropdownMenuItem className="cursor-pointer" onClick={handleEdit}>
                   <Edit className="h-4 w-4 mr-2" />
                   Edit
                 </DropdownMenuItem>
-                <DropdownMenuItem className="cursor-pointer">
+                <DropdownMenuItem className="cursor-pointer" onClick={handleSubmitForApproval}>
                   <Send className="h-4 w-4 mr-2" />
                   Submit for Approval
                 </DropdownMenuItem>
               </>
             )}
-            <DropdownMenuItem className="cursor-pointer">
+            <DropdownMenuItem className="cursor-pointer" onClick={handleDuplicate}>
               <Copy className="h-4 w-4 mr-2" />
               Duplicate
             </DropdownMenuItem>
             {expense.status === "DRAFT" && (
               <>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-red-600 cursor-pointer focus:text-red-600 focus:bg-red-50">
+                <DropdownMenuItem 
+                  className="text-red-600 cursor-pointer focus:text-red-600 focus:bg-red-50"
+                  onClick={handleDelete}
+                >
                   <Trash className="h-4 w-4 mr-2" />
                   Delete
                 </DropdownMenuItem>
