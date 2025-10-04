@@ -1,17 +1,15 @@
-// Component exports for easy importing
+// Layout Components
+export { AuthLayout } from "./layout/auth-layout";
+export { DashboardLayout } from "./layout/dashboard-layout";
 
-// Forms
-export { default as CompanySignupForm } from "./forms/company-signup-form";
-export { default as UserSigninForm } from "./forms/user-signin-form";
-export { default as ExpenseSubmissionForm } from "./forms/expense-submission-form";
-
-// Layout
-export { default as DashboardLayout } from "./layout/dashboard-layout";
-export { default as AuthLayout } from "./layout/auth-layout";
+// Form Components
+export { CompanySignupForm } from "./forms/company-signup-form";
+export { UserSigninForm } from "./forms/user-signin-form";
+export { EnhancedInput } from "./forms/enhanced-input";
 
 // Shared Components
-export { default as StatusBadge } from "./shared/status-badge";
-export { default as CurrencyDisplay } from "./shared/currency-display";
+export { StatusBadge, ExpenseStatusBadge } from "./shared/status-badge";
+export { CurrencyDisplay, FinancialAmount, CurrencySelector, COMMON_CURRENCIES } from "./shared/currency-display";
 
 // Dashboard Components - Admin
 export { default as UserManagementTable } from "./dashboard/admin/user-management-table";
