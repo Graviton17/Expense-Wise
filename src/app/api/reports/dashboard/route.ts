@@ -2,14 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser } from "@/middleware/auth";
 import { formatErrorResponse } from "@/middleware/error-handler";
 import {
-  summaryQuerySchema,
+  dashboardQuerySchema,
   validateReportInput,
 } from "@/lib/validations/reports";
 import { ReportsService } from "@/services";
 
 /**
- * Get Dashboard Summary
- * GET /api/reports/summary?period=month&startDate=2024-01-01&endDate=2024-01-31&userId=user123
+ * Get Dashboard Analytics
+ * GET /api/reports/dashboard?period=month&startDate=2024-01-01&endDate=2024-01-31&userId=user123
+ *
+ * Returns comprehensive dashboard data including:
+ * - Summary statistics (total, average expenses)
+ * - Status breakdown (draft, pending, approved, rejected)
+ * - Category breakdown with amounts
+ * - Monthly trends over the last 12 months
+ * - Top spenders (for managers/admins)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -33,7 +40,7 @@ export async function GET(request: NextRequest) {
       userId: searchParams.get("userId") || undefined,
     };
 
-    const validation = validateReportInput(summaryQuerySchema, queryData);
+    const validation = validateReportInput(dashboardQuerySchema, queryData);
     if (!validation.success) {
       return NextResponse.json(
         {
@@ -44,17 +51,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get summary statistics
-    const summaryData = await ReportsService.getSummaryStats(
+    // Get dashboard analytics data
+    const dashboardData = await ReportsService.getDashboardAnalytics(
       user.companyId,
       validation.data!,
-      user.sub, // user ID is in the 'sub' field
+      user.sub,
       user.role
     );
 
     return NextResponse.json({
       success: true,
-      data: summaryData,
+      data: dashboardData,
     });
   } catch (error) {
     return formatErrorResponse(error as Error);

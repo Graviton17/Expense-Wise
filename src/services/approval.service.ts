@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import {
-  Approval,
   ApprovalPublic,
   ApprovalStatus,
   ServiceResult,
@@ -492,6 +491,409 @@ export class ApprovalService {
   // Helper method to convert Approval to ApprovalPublic
   private static toPublicApproval(approval: any): ApprovalPublic {
     return approval as ApprovalPublic;
+  }
+
+  // Enhanced methods for approval workflow management
+
+  /**
+   * Evaluate which approval rules apply to an expense
+   */
+  static async evaluateApprovalRules(
+    expenseId: string,
+    companyId: string
+  ): Promise<ServiceResult<string[]>> {
+    try {
+      const expense = await prisma.expense.findFirst({
+        where: {
+          id: expenseId,
+          companyId,
+        },
+        include: {
+          submitter: true,
+          category: true,
+        },
+      });
+
+      if (!expense) {
+        return {
+          success: false,
+          error: {
+            message: "Expense not found",
+            code: "EXPENSE_NOT_FOUND",
+          },
+        };
+      }
+
+      // Get all active approval rules for the company
+      const rules = await prisma.approvalRule.findMany({
+        where: {
+          companyId,
+          // TODO: Add isActive field to schema
+        },
+        include: {
+          approvers: {
+            include: {
+              approver: true,
+            },
+          },
+        },
+      });
+
+      const applicableRuleIds: string[] = [];
+
+      for (const rule of rules) {
+        // Check amount threshold condition
+        // TODO: Parse conditions from database or add conditions field
+        // For now, assume all rules apply
+        applicableRuleIds.push(rule.id);
+      }
+
+      return {
+        success: true,
+        data: applicableRuleIds,
+      };
+    } catch (error) {
+      businessLogger.error(
+        "Failed to evaluate approval rules",
+        error as Error,
+        {
+          expenseId,
+          companyId,
+        }
+      );
+      return {
+        success: false,
+        error: {
+          message: "Failed to evaluate approval rules",
+          code: "RULE_EVALUATION_FAILED",
+        },
+      };
+    }
+  }
+
+  /**
+   * Create approval chain based on applicable rules
+   */
+  static async createApprovalChain(
+    expenseId: string,
+    ruleIds: string[]
+  ): Promise<ServiceResult<string[]>> {
+    try {
+      const approvalIds: string[] = [];
+
+      for (const ruleId of ruleIds) {
+        const rule = await prisma.approvalRule.findUnique({
+          where: { id: ruleId },
+          include: {
+            approvers: {
+              include: {
+                approver: true,
+              },
+              orderBy: {
+                sequenceOrder: "asc",
+              },
+            },
+          },
+        });
+
+        if (!rule) continue;
+
+        // Create approvals based on rule configuration
+        if (rule.isSequenceRequired) {
+          // Sequential approval - create one approval at a time
+          const firstApprover = rule.approvers[0];
+          if (firstApprover) {
+            const approval = await prisma.expenseApproval.create({
+              data: {
+                expenseId,
+                approverId: firstApprover.approverId,
+                status: "PENDING",
+              },
+            });
+            approvalIds.push(approval.id);
+          }
+        } else {
+          // Parallel approval - create all approvals at once
+          for (const approver of rule.approvers) {
+            const approval = await prisma.expenseApproval.create({
+              data: {
+                expenseId,
+                approverId: approver.approverId,
+                status: "PENDING",
+              },
+            });
+            approvalIds.push(approval.id);
+          }
+        }
+      }
+
+      return {
+        success: true,
+        data: approvalIds,
+      };
+    } catch (error) {
+      businessLogger.error("Failed to create approval chain", error as Error, {
+        expenseId,
+        ruleIds,
+      });
+      return {
+        success: false,
+        error: {
+          message: "Failed to create approval chain",
+          code: "APPROVAL_CHAIN_CREATION_FAILED",
+        },
+      };
+    }
+  }
+
+  /**
+   * Process approval workflow for an expense
+   */
+  static async processApprovalWorkflow(
+    expenseId: string,
+    companyId: string
+  ): Promise<ServiceResult<{ approvalIds: string[]; message: string }>> {
+    try {
+      // Evaluate applicable rules
+      const rulesResult = await this.evaluateApprovalRules(
+        expenseId,
+        companyId
+      );
+      if (!rulesResult.success) {
+        return rulesResult;
+      }
+
+      const applicableRules = rulesResult.data!;
+
+      if (applicableRules.length === 0) {
+        // No approval rules apply, auto-approve the expense
+        await prisma.expense.update({
+          where: { id: expenseId },
+          data: { status: "APPROVED" },
+        });
+
+        return {
+          success: true,
+          data: {
+            approvalIds: [],
+            message: "Expense auto-approved (no approval rules apply)",
+          },
+        };
+      }
+
+      // Create approval chain
+      const chainResult = await this.createApprovalChain(
+        expenseId,
+        applicableRules
+      );
+      if (!chainResult.success) {
+        return chainResult;
+      }
+
+      // Update expense status to pending approval
+      await prisma.expense.update({
+        where: { id: expenseId },
+        data: { status: "PENDING_APPROVAL" },
+      });
+
+      return {
+        success: true,
+        data: {
+          approvalIds: chainResult.data!,
+          message: `Approval workflow started with ${
+            chainResult.data!.length
+          } approval(s)`,
+        },
+      };
+    } catch (error) {
+      businessLogger.error(
+        "Failed to process approval workflow",
+        error as Error,
+        {
+          expenseId,
+          companyId,
+        }
+      );
+      return {
+        success: false,
+        error: {
+          message: "Failed to process approval workflow",
+          code: "APPROVAL_WORKFLOW_FAILED",
+        },
+      };
+    }
+  }
+
+  /**
+   * Check if all required approvals are complete
+   */
+  static async checkApprovalCompletion(
+    expenseId: string
+  ): Promise<ServiceResult<{ isComplete: boolean; status: string }>> {
+    try {
+      const approvals = await prisma.expenseApproval.findMany({
+        where: { expenseId },
+        include: {
+          approver: true,
+        },
+      });
+
+      if (approvals.length === 0) {
+        return {
+          success: true,
+          data: { isComplete: true, status: "APPROVED" },
+        };
+      }
+
+      const pendingApprovals = approvals.filter((a) => a.status === "PENDING");
+      const rejectedApprovals = approvals.filter(
+        (a) => a.status === "REJECTED"
+      );
+
+      // If any approval is rejected, the expense is rejected
+      if (rejectedApprovals.length > 0) {
+        return {
+          success: true,
+          data: { isComplete: true, status: "REJECTED" },
+        };
+      }
+
+      // If no pending approvals, the expense is approved
+      if (pendingApprovals.length === 0) {
+        return {
+          success: true,
+          data: { isComplete: true, status: "APPROVED" },
+        };
+      }
+
+      // Still pending approvals
+      return {
+        success: true,
+        data: { isComplete: false, status: "PENDING_APPROVAL" },
+      };
+    } catch (error) {
+      businessLogger.error(
+        "Failed to check approval completion",
+        error as Error,
+        {
+          expenseId,
+        }
+      );
+      return {
+        success: false,
+        error: {
+          message: "Failed to check approval completion",
+          code: "APPROVAL_CHECK_FAILED",
+        },
+      };
+    }
+  }
+
+  /**
+   * Get approval statistics for a company
+   */
+  static async getApprovalStatistics(
+    companyId: string,
+    dateRange?: { startDate: Date; endDate: Date }
+  ): Promise<
+    ServiceResult<{
+      totalApprovals: number;
+      pendingApprovals: number;
+      approvedApprovals: number;
+      rejectedApprovals: number;
+      averageApprovalTime: number;
+    }>
+  > {
+    try {
+      const whereClause: any = {
+        expense: {
+          companyId,
+        },
+      };
+
+      if (dateRange) {
+        whereClause.expense.createdAt = {
+          gte: dateRange.startDate,
+          lte: dateRange.endDate,
+        };
+      }
+
+      const [
+        totalApprovals,
+        pendingApprovals,
+        approvedApprovals,
+        rejectedApprovals,
+        processedApprovals,
+      ] = await Promise.all([
+        prisma.expenseApproval.count({ where: whereClause }),
+        prisma.expenseApproval.count({
+          where: { ...whereClause, status: "PENDING" },
+        }),
+        prisma.expenseApproval.count({
+          where: { ...whereClause, status: "APPROVED" },
+        }),
+        prisma.expenseApproval.count({
+          where: { ...whereClause, status: "REJECTED" },
+        }),
+        prisma.expenseApproval.findMany({
+          where: {
+            ...whereClause,
+            status: { in: ["APPROVED", "REJECTED"] },
+            processedAt: { not: null },
+          },
+          select: {
+            processedAt: true,
+            expense: {
+              select: {
+                createdAt: true,
+              },
+            },
+          },
+        }),
+      ]);
+
+      // Calculate average approval time
+      let averageApprovalTime = 0;
+      if (processedApprovals.length > 0) {
+        const totalTime = processedApprovals.reduce((sum, approval) => {
+          if (approval.processedAt) {
+            const timeDiff =
+              approval.processedAt.getTime() -
+              approval.expense.createdAt.getTime();
+            return sum + timeDiff;
+          }
+          return sum;
+        }, 0);
+        averageApprovalTime =
+          totalTime / processedApprovals.length / (1000 * 60 * 60); // Convert to hours
+      }
+
+      return {
+        success: true,
+        data: {
+          totalApprovals,
+          pendingApprovals,
+          approvedApprovals,
+          rejectedApprovals,
+          averageApprovalTime,
+        },
+      };
+    } catch (error) {
+      businessLogger.error(
+        "Failed to get approval statistics",
+        error as Error,
+        {
+          companyId,
+        }
+      );
+      return {
+        success: false,
+        error: {
+          message: "Failed to get approval statistics",
+          code: "STATISTICS_FETCH_FAILED",
+        },
+      };
+    }
   }
 }
 
