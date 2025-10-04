@@ -185,20 +185,23 @@ export interface Webhook {
 export interface UserPublic {
   id: string;
   email: string;
-  firstName: string;
-  lastName: string;
+  name: string;
   role: UserRole;
   companyId: string;
   managerId?: string;
-  isActive: boolean;
-  lastLoginAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 
   // Relations
   company?: CompanyPublic;
   manager?: UserPublic;
-  directReports?: UserPublic[];
+  subordinates?: UserPublic[];
+
+  // Optional computed fields
+  stats?: {
+    totalExpenses?: number;
+    subordinates?: number;
+  };
 }
 
 export interface CompanyPublic {
@@ -206,7 +209,6 @@ export interface CompanyPublic {
   name: string;
   country: string;
   baseCurrency: string;
-  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -215,9 +217,7 @@ export interface CategoryPublic {
   id: string;
   name: string;
   companyId: string;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
+  expenseCount?: number; // Optional computed field
 }
 
 export interface ExpensePublic {
@@ -407,3 +407,120 @@ export type WebhookCreateInput = Omit<
 export type WebhookUpdateInput = Partial<
   Omit<Webhook, "id" | "createdAt" | "updatedAt">
 >;
+
+// Report-related types and enums
+export enum ReportFormat {
+  JSON = "json",
+  CSV = "csv",
+  XLSX = "xlsx",
+  PDF = "pdf",
+}
+
+export enum ReportPeriod {
+  WEEK = "week",
+  MONTH = "month",
+  QUARTER = "quarter",
+  YEAR = "year",
+}
+
+export enum ExportTaskStatus {
+  PROCESSING = "PROCESSING",
+  COMPLETED = "COMPLETED",
+  FAILED = "FAILED",
+}
+
+// Report data structures
+export interface ReportSummary {
+  totalExpenses: number;
+  totalAmount: number;
+  averageExpense: number;
+}
+
+export interface StatusBreakdown {
+  status: ExpenseStatus;
+  count: number;
+  amount: number;
+}
+
+export interface CategoryBreakdown {
+  categoryId: string;
+  categoryName: string;
+  count: number;
+  amount: number;
+}
+
+export interface MonthlyTrend {
+  month: Date;
+  count: number;
+  total: number;
+}
+
+export interface TopSpender {
+  id: string;
+  name: string;
+  email: string;
+  expenseCount: number;
+  totalAmount: number;
+}
+
+export interface DashboardAnalytics {
+  summary: ReportSummary;
+  statusBreakdown: StatusBreakdown[];
+  categoryBreakdown: CategoryBreakdown[];
+  monthlyTrends: MonthlyTrend[];
+  topSpenders: TopSpender[];
+  period: {
+    startDate: string;
+    endDate: string;
+    type: ReportPeriod;
+  };
+}
+
+export interface PaginationInfo {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+}
+
+export interface ExpenseReportFilters {
+  startDate?: string;
+  endDate?: string;
+  status?: ExpenseStatus;
+  categoryId?: string;
+  userId?: string;
+}
+
+export interface ExpenseReport {
+  expenses: Expense[];
+  pagination: PaginationInfo;
+  filters: ExpenseReportFilters;
+}
+
+export interface ExportTask {
+  taskId: string;
+  status: ExportTaskStatus;
+  format: ReportFormat;
+  createdAt: string;
+  completedAt?: string;
+  downloadUrl?: string;
+  error?: string;
+  message?: string;
+}
+
+export interface SummaryStats {
+  period: {
+    startDate: string;
+    endDate: string;
+    type: ReportPeriod;
+  };
+  summary: {
+    totalExpenses: number;
+    totalAmount: number;
+    averageAmount: number;
+    maxAmount: number;
+    minAmount: number;
+  };
+}

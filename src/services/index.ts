@@ -4,3 +4,4 @@ export { default as ExpenseService } from "./expense.service";
 export { default as ApprovalService } from "./approval.service";
 export { default as ReceiptService } from "./receipt.service";
 export { default as NotificationService } from "./notification.service";
+export { ReportsService } from "./reports.service";

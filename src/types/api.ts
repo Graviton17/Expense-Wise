@@ -339,4 +339,148 @@ export type {
   CategoryPublic,
   ReceiptPublic,
   NotificationPublic,
+  ReportFormat,
+  ReportPeriod,
+  ExportTaskStatus,
 } from "./database";
+
+// Reports API Types
+export interface DashboardQueryRequest {
+  startDate?: string;
+  endDate?: string;
+  userId?: string;
+  period?: "week" | "month" | "quarter" | "year";
+}
+
+export interface SummaryQueryRequest {
+  period?: "week" | "month" | "quarter" | "year";
+  startDate?: string;
+  endDate?: string;
+  userId?: string;
+}
+
+export interface ExpenseReportQueryRequest {
+  startDate?: string;
+  endDate?: string;
+  userId?: string;
+  categoryId?: string;
+  status?: "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
+  format?: "json" | "csv" | "xlsx" | "pdf";
+  page?: string;
+  limit?: string;
+}
+
+export interface ExportReportRequest {
+  format: "json" | "csv" | "xlsx" | "pdf";
+  filters: {
+    startDate: string;
+    endDate: string;
+    status?: ("DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED")[];
+    categoryId?: string;
+    userId?: string;
+    minAmount?: number;
+    maxAmount?: number;
+  };
+  includeReceipts?: boolean;
+}
+
+export interface DashboardAnalyticsResponse {
+  success: true;
+  data: {
+    summary: {
+      totalExpenses: number;
+      totalAmount: number;
+      averageExpense: number;
+    };
+    statusBreakdown: Array<{
+      status: ExpenseStatus;
+      count: number;
+      amount: number;
+    }>;
+    categoryBreakdown: Array<{
+      categoryId: string;
+      categoryName: string;
+      count: number;
+      amount: number;
+    }>;
+    monthlyTrends: Array<{
+      month: Date;
+      count: number;
+      total: number;
+    }>;
+    topSpenders: Array<{
+      id: string;
+      name: string;
+      email: string;
+      expenseCount: number;
+      totalAmount: number;
+    }>;
+    period: {
+      startDate: string;
+      endDate: string;
+      type: "week" | "month" | "quarter" | "year";
+    };
+  };
+}
+
+export interface SummaryStatsResponse {
+  success: true;
+  data: {
+    period: {
+      startDate: string;
+      endDate: string;
+      type: "week" | "month" | "quarter" | "year";
+    };
+    summary: {
+      totalExpenses: number;
+      totalAmount: number;
+      averageAmount: number;
+      maxAmount: number;
+      minAmount: number;
+    };
+  };
+}
+
+export interface ExpenseReportResponse {
+  success: true;
+  data: {
+    expenses: ExpensePublic[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+      hasNext: boolean;
+      hasPrev: boolean;
+    };
+    filters: {
+      startDate?: string;
+      endDate?: string;
+      status?: ExpenseStatus;
+      categoryId?: string;
+      userId?: string;
+    };
+  };
+}
+
+export interface ExportTaskResponse {
+  success: true;
+  data: {
+    taskId: string;
+    status: "PROCESSING" | "COMPLETED" | "FAILED";
+    message: string;
+  };
+}
+
+export interface ExportStatusResponse {
+  success: true;
+  data: {
+    taskId: string;
+    status: "PROCESSING" | "COMPLETED" | "FAILED";
+    format: string;
+    createdAt: string;
+    completedAt?: string;
+    downloadUrl?: string;
+    error?: string;
+  };
+}
